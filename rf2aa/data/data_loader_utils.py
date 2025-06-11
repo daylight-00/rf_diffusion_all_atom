@@ -455,7 +455,7 @@ def merge_a3m_homo(msa_orig, ins_orig, nmer, mode="default"):
              ins[N:, start:start+L] = ins_orig[1:]
              start += L        
 
-     return {"msa": msa, "ins": ins}
+     return msa, ins
 
 def merge_msas(a3m_list, L_s):
     """
@@ -548,7 +548,7 @@ def join_msas_by_taxid(a3mA, a3mB, idx_overlap=None):
     # pair sequences
     taxids_shared = a3mA['taxid'][np.isin(a3mA['taxid'],a3mB['taxid'])]
     i_pairedA, i_pairedB = [], []
-
+    
     for taxid in taxids_shared:
         i_match = np.where(a3mA['taxid']==taxid)[0]
         i_match_best = torch.argmin(torch.sum(a3mA['msa'][i_match]==a3mA['msa'][0], axis=1))
@@ -744,7 +744,7 @@ def load_minimal_multi_msa(hash_list, taxid_list, Ls, params):
     return a3m_out, hashes_out, Ls_out    
 
 
-def expand_multi_msa(a3m, hashes_in, hashes_out, Ls_in, Ls_out):
+def expand_multi_msa(a3m, hashes_in, hashes_out, Ls_in, Ls_out, params):
     """Expands a multi-MSA of unique chains into an MSA of a
     hetero-homo-oligomer in which some chains appear more than once. The query
     sequences (1st sequence of MSA) are concatenated directly along the

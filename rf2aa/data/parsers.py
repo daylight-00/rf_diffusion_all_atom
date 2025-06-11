@@ -227,7 +227,7 @@ def parse_multichain_fasta(filename,  maxseq=10000, rna_alphabet=False, dna_alph
 
     # convert letters into numbers
     if rna_alphabet:
-        alphabet = np.array(list("00000000000000000000-000000ACGUN"), dtype='|S1').view(np.uint8)
+        alphabet = np.array(list("00000000000000000000-000000ACGTN"), dtype='|S1').view(np.uint8)
     elif dna_alphabet:
         alphabet = np.array(list("00000000000000000000-0ACGTD00000"), dtype='|S1').view(np.uint8)
     else:
@@ -414,21 +414,18 @@ def parse_a3m(filename, maxseq=8000, paired=False):
     else:
         fstream = open(filename, 'r')
 
-    for i, line in enumerate(fstream):
+    for line in fstream:
         
         # skip labels
         if line[0] == '>':
             if paired: # paired MSAs only have a TAXID in the fasta header
                 taxIDs.append(line[1:].strip())
             else: # unpaired MSAs have all the metadata so use regex to pull out TAXID
-                if i == 0:
-                    taxIDs.append("query")
+                match = re.search( r'TaxID=(\d+)', line)
+                if match:
+                    taxIDs.append(match.group(1))
                 else:
-                    match = re.search( r'TaxID=(\d+)', line)
-                    if match:
-                        taxIDs.append(match.group(1))
-                    else:
-                        taxIDs.append("") # query sequence
+                    taxIDs.append("query") # query sequence
             continue
             
         # remove right whitespaces
