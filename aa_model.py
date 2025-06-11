@@ -178,21 +178,25 @@ def make_indep(pdb, ligand=None, center=True):
     protein_L, nprotatoms, _ = xyz_prot.shape
     msa_prot = torch.tensor(seq_prot)[None].long()
     if ligand:
+        # ligand 입력된 경우만 처리
         with open(pdb, 'r') as fh:
             stream = [l for l in fh if "HETATM" in l or "CONECT" in l]
         stream = filter_het(stream, ligand)
         if not len(stream):
-            raise Exception(f'ligand {ligand} not found in pdb: {pdb}')
-
-        mol, msa_sm, ins_sm, xyz_sm, _ = parse_mol("".join(stream), filetype="pdb", string=True)
-        G = rf2aa.util.get_nxgraph(mol)
-        atom_frames = rf2aa.util.get_atom_frames(msa_sm, G)
-        N_symmetry, sm_L, _ = xyz_sm.shape
-        Ls = [protein_L, sm_L]
-        msa = torch.cat([msa_prot[0], msa_sm])[None]
-        chirals = get_chirals(mol, xyz_sm[0])
-        if chirals.numel() !=0:
-            chirals[:,:-1] += protein_L
+            print(f'[WARNING] ligand {ligand} not found in pdb: {pdb}')
+            Ls = [protein_L, 0]
+            N_symmetry = 1
+            msa = msa_prot
+        else:
+            mol, msa_sm, ins_sm, xyz_sm, _ = parse_mol("".join(stream), filetype="pdb", string=True)
+            G = rf2aa.util.get_nxgraph(mol)
+            atom_frames = rf2aa.util.get_atom_frames(msa_sm, G)
+            N_symmetry, sm_L, _ = xyz_sm.shape
+            Ls = [protein_L, sm_L]
+            msa = torch.cat([msa_prot[0], msa_sm])[None]
+            chirals = get_chirals(mol, xyz_sm[0])
+            if chirals.numel() !=0:
+                chirals[:,:-1] += protein_L
     else:
         Ls = [msa_prot.shape[-1], 0]
         N_symmetry = 1
