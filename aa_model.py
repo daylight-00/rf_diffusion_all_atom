@@ -165,9 +165,6 @@ def filter_het(pdb_lines, ligand):
 def make_indep(pdb, ligand=None, center=True):
     chirals = torch.Tensor()
     atom_frames = torch.zeros((0,3,2))
-
-    xyz_prot, mask_prot, idx_prot, seq_prot = parse_pdb(pdb, seq=True)
-
     target_feats = inference.utils.parse_pdb(pdb)
     xyz_prot, mask_prot, idx_prot, seq_prot = target_feats['xyz'], target_feats['mask'], target_feats['idx'], target_feats['seq']
     xyz_prot[:,14:] = 0 # remove hydrogens
@@ -197,7 +194,7 @@ def make_indep(pdb, ligand=None, center=True):
         Ls = [msa_prot.shape[-1], 0]
         N_symmetry = 1
         msa = msa_prot
-    print(protein_L, Ls)
+    
     xyz = torch.full((N_symmetry, sum(Ls), ChemData().NTOTAL, 3), np.nan).float()
     mask = torch.full(xyz.shape[:-1], False).bool()
     xyz[:, :Ls[0], :nprotatoms, :] = xyz_prot.expand(N_symmetry, Ls[0], nprotatoms, 3)
@@ -205,14 +202,19 @@ def make_indep(pdb, ligand=None, center=True):
         xyz[:, Ls[0]:, 1, :] = xyz_sm
     xyz = xyz[0]
     mask[:, :protein_L, :nprotatoms] = mask_prot.expand(N_symmetry, Ls[0], nprotatoms)
-    idx_sm = torch.arange(max(idx_prot),max(idx_prot)+Ls[1])+200
-    idx_pdb = torch.concat([torch.tensor(idx_prot), idx_sm])
-    
+    if protein_L:
+        idx_sm = torch.arange(max(idx_prot),max(idx_prot)+Ls[1])+200
+        idx_pdb = torch.concat([torch.tensor(idx_prot), idx_sm])
+    else:
+        idx_sm = torch.arange(Ls[1]) + 200
+        idx_pdb = idx_sm + 200
+
     seq = msa[0]
     
     bond_feats = torch.zeros((sum(Ls), sum(Ls))).long()
-    bond_feats[:Ls[0], :Ls[0]] = rf2aa.util.get_protein_bond_feats(Ls[0])
-    if ligand:
+    if protein_L:
+        bond_feats[:Ls[0], :Ls[0]] = rf2aa.util.get_protein_bond_feats(Ls[0])
+    elif ligand:
         bond_feats[Ls[0]:, Ls[0]:] = rf2aa.util.get_bond_feats(mol)
 
 
