@@ -17,19 +17,12 @@ def get_ligands(pdb_lines):
         ligands.add(curr_ligand)
     return ligands
 
-def rewrite(path: str, outpath: str, contig_ligand: str = None) -> None:
-    """Idealize backbone; if ligand present in contig, process, else skip ligand."""
+def rewrite(path, outpath):
     with open(path, 'r') as fh:
         stream = [l for l in fh if "HETATM" in l or "CONECT" in l]
-    ligands_in_pdb = get_ligands(stream)
 
-    # ligand 지정된 경우에만 ligand 사용
-    ligand_to_use = None
-    if contig_ligand and contig_ligand in ligands_in_pdb:
-        ligand_to_use = contig_ligand
-    # ligand 없거나 contig에 없으면 None
-
-    indep = aa_model.make_indep(path, ligand=ligand_to_use, center=False)
+    ligands = get_ligands(stream)
+    indep = aa_model.make_indep(path, ','.join(ligands), center=False)
     xyz = indep.xyz[~indep.is_sm]
     idx = indep.idx[~indep.is_sm]
     L = xyz.shape[0]
@@ -37,12 +30,9 @@ def rewrite(path: str, outpath: str, contig_ligand: str = None) -> None:
     xyz = rf2aa.util.idealize_reference_frame(ala_seq[None], xyz[None])[0]
     xyz_ideal = get_o(xyz, idx)
     indep.xyz[~indep.is_sm, :4] = xyz_ideal
-
-    # ligand 있는 경우만 지정, 없으면 lig_name 인자 생략
-    if ligand_to_use:
-        indep.write_pdb(outpath, lig_name=ligand_to_use)
-    else:
-        indep.write_pdb(outpath)
+    ligands = list(ligands)
+    assert len(ligands) <= 1, f'Found >1 ligand: {ligands}'
+    indep.write_pdb(outpath, lig_name=ligands[0]) if ligands else indep.write_pdb(outpath)
 
 
 def get_o(xyz, idx):
