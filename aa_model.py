@@ -70,6 +70,9 @@ class Indep:
     terminus_type: torch.Tensor
 
     def write_pdb(self, path, **kwargs):
+        if self.seq.numel() == 0 or self.xyz.numel() == 0:
+            print(f"[WARNING] Empty structure, skipping PDB write: {path}")
+            return
         with open(path, kwargs.pop('file_mode', 'w')) as fh:
             return self.write_pdb_file(fh, **kwargs)
     
@@ -166,17 +169,18 @@ def make_indep(pdb, ligand=None, center=True):
     chirals = torch.Tensor()
     atom_frames = torch.zeros((0,3,2))
 
-    xyz_prot, mask_prot, idx_prot, seq_prot = parse_pdb(pdb, seq=True)
+    xyz_prot, mask_prot, idx_prot, seq_prot = None, None, None, None
+    try:
+        target_feats = inference.utils.parse_pdb(pdb)
+        xyz_prot, mask_prot, idx_prot, seq_prot = target_feats['xyz'], target_feats['mask'], target_feats['idx'], target_feats['seq']
+        xyz_prot[:,14:] = 0 # remove hydrogens
+        mask_prot[:,14:] = False
+        xyz_prot = torch.tensor(xyz_prot)
+        mask_prot = torch.tensor(mask_prot)
+        xyz_prot[~mask_prot] = np.nan
+    except Exception:
+        pass
 
-    target_feats = inference.utils.parse_pdb(pdb)
-    xyz_prot, mask_prot, idx_prot, seq_prot = target_feats['xyz'], target_feats['mask'], target_feats['idx'], target_feats['seq']
-    xyz_prot[:,14:] = 0 # remove hydrogens
-    mask_prot[:,14:] = False
-    xyz_prot = torch.tensor(xyz_prot)
-    mask_prot = torch.tensor(mask_prot)
-    xyz_prot[~mask_prot] = np.nan
-    protein_L, nprotatoms, _ = xyz_prot.shape
-    msa_prot = torch.tensor(seq_prot)[None].long()
     if ligand:
         # ligand 입력된 경우만 처리
         with open(pdb, 'r') as fh:
@@ -184,67 +188,104 @@ def make_indep(pdb, ligand=None, center=True):
         stream = filter_het(stream, ligand)
         if not len(stream):
             print(f'[WARNING] ligand {ligand} not found in pdb: {pdb}')
-            Ls = [protein_L, 0]
-            N_symmetry = 1
-            msa = msa_prot
+            mol, msa_sm, ins_sm, xyz_sm = None, None, None, None
+            sm_L = 0
         else:
             mol, msa_sm, ins_sm, xyz_sm, _ = parse_mol("".join(stream), filetype="pdb", string=True)
             G = rf2aa.util.get_nxgraph(mol)
             atom_frames = rf2aa.util.get_atom_frames(msa_sm, G)
             N_symmetry, sm_L, _ = xyz_sm.shape
-            Ls = [protein_L, sm_L]
-            msa = torch.cat([msa_prot[0], msa_sm])[None]
             chirals = get_chirals(mol, xyz_sm[0])
-            if chirals.numel() !=0:
-                chirals[:,:-1] += protein_L
+            if chirals.numel() !=0 and xyz_prot is not None:
+                chirals[:,:-1] += xyz_prot.shape[0]  # protein length
     else:
-        Ls = [msa_prot.shape[-1], 0]
+        sm_L = 0
         N_symmetry = 1
+        msa_sm = torch.tensor([])
+
+    protein_L = xyz_prot.shape[0] if xyz_prot is not None else 0
+    nprotatoms = xyz_prot.shape[1] if xyz_prot is not None else 0
+
+    # shape 계산
+    Ls = [protein_L, sm_L]
+    total_L = sum(Ls)
+    N_symmetry = N_symmetry if ligand and sm_L > 0 else 1
+
+    # msa 처리
+    msa_prot = torch.tensor(seq_prot)[None].long() if seq_prot is not None else torch.tensor([]).long()
+    if protein_L and sm_L:
+        msa = torch.cat([msa_prot[0], msa_sm])[None]
+    elif protein_L:
         msa = msa_prot
+    elif sm_L:
+        msa = msa_sm[None]
+    else:
+        msa = torch.tensor([]).long()[None]
 
-    xyz = torch.full((N_symmetry, sum(Ls), ChemData().NTOTAL, 3), np.nan).float()
+    # xyz, mask 생성
+    xyz = torch.full((N_symmetry, total_L, ChemData().NTOTAL, 3), np.nan).float()
     mask = torch.full(xyz.shape[:-1], False).bool()
-    xyz[:, :Ls[0], :nprotatoms, :] = xyz_prot.expand(N_symmetry, Ls[0], nprotatoms, 3)
-    if ligand:
-        xyz[:, Ls[0]:, 1, :] = xyz_sm
-    xyz = xyz[0]
-    mask[:, :protein_L, :nprotatoms] = mask_prot.expand(N_symmetry, Ls[0], nprotatoms)
-    idx_sm = torch.arange(max(idx_prot),max(idx_prot)+Ls[1])+200
-    idx_pdb = torch.concat([torch.tensor(idx_prot), idx_sm])
-    
-    seq = msa[0]
-    
-    bond_feats = torch.zeros((sum(Ls), sum(Ls))).long()
-    bond_feats[:Ls[0], :Ls[0]] = rf2aa.util.get_protein_bond_feats(Ls[0])
-    if ligand:
-        bond_feats[Ls[0]:, Ls[0]:] = rf2aa.util.get_bond_feats(mol)
+    if protein_L:
+        xyz[:, :protein_L, :nprotatoms, :] = xyz_prot.expand(N_symmetry, protein_L, nprotatoms, 3)
+        mask[:, :protein_L, :nprotatoms] = mask_prot.expand(N_symmetry, protein_L, nprotatoms)
+    if sm_L:
+        xyz[:, protein_L:, 1, :] = xyz_sm
+        # ligand는 atom 1에만 저장
 
+    xyz = xyz[0] if N_symmetry == 1 else xyz[0]
+    mask = mask[0] if N_symmetry == 1 else mask[0]
 
-    same_chain = torch.zeros((sum(Ls), sum(Ls))).long()
-    same_chain[:Ls[0], :Ls[0]] = 1
-    same_chain[Ls[0]:, Ls[0]:] = 1
-    is_sm = torch.zeros(sum(Ls)).bool()
-    is_sm[Ls[0]:] = True
-    assert len(Ls) <= 2, 'multi chain inference not implemented yet'
-    terminus_type = torch.zeros(sum(Ls))
-    terminus_type[0] = N_TERMINUS
-    terminus_type[Ls[0]-1] = C_TERMINUS
+    # idx 처리
+    if protein_L:
+        idx_sm = torch.arange(max(idx_prot)+1 if len(idx_prot) else 0, max(idx_prot)+1+sm_L if len(idx_prot) else sm_L)+200
+        idx_pdb = torch.cat([torch.tensor(idx_prot), idx_sm]) if sm_L else torch.tensor(idx_prot)
+    elif sm_L:
+        idx_sm = torch.arange(sm_L)
+        idx_pdb = idx_sm + 200
+    else:
+        idx_pdb = torch.tensor([])
 
-    if center:
+    seq = msa[0] if msa.shape[0] > 0 else torch.tensor([])
+    bond_feats = torch.zeros((total_L, total_L)).long()
+    if protein_L:
+        bond_feats[:protein_L, :protein_L] = rf2aa.util.get_protein_bond_feats(protein_L)
+    if sm_L:
+        bond_feats[protein_L:, protein_L:] = rf2aa.util.get_bond_feats(mol)
+
+    same_chain = torch.zeros((total_L, total_L)).long()
+    if protein_L:
+        same_chain[:protein_L, :protein_L] = 1
+    if sm_L:
+        same_chain[protein_L:, protein_L:] = 1
+
+    is_sm = torch.zeros(total_L).bool()
+    if sm_L:
+        is_sm[protein_L:] = True
+
+    # terminus 처리
+    terminus_type = torch.zeros(total_L)
+    if protein_L:
+        terminus_type[0] = N_TERMINUS
+        terminus_type[protein_L-1] = C_TERMINUS
+
+    # center
+    if center and total_L > 0:
         xyz = get_init_xyz(xyz[None, None], is_sm).squeeze()
-    xyz[is_sm, 0] = 0
-    xyz[is_sm, 2] = 0
+    if sm_L:
+        xyz[is_sm, 0] = 0
+        xyz[is_sm, 2] = 0
+
     indep = Indep(
         seq,
         xyz,
         idx_pdb,
-        # SM specific
         bond_feats,
         chirals,
         atom_frames,
         same_chain,
         is_sm,
-        terminus_type)
+        terminus_type
+    )
     return indep
 
 class Model:

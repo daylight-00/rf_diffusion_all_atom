@@ -30,6 +30,10 @@ def rewrite(path: str, outpath: str, contig_ligand: str = None) -> None:
     # ligand 없거나 contig에 없으면 None
 
     indep = aa_model.make_indep(path, ligand=ligand_to_use, center=False)
+    if (~indep.is_sm).sum() == 0:  # protein 없음
+        # ligand만 저장
+        indep.write_pdb(outpath, lig_name=ligand_to_use if ligand_to_use else None)
+        return
     xyz = indep.xyz[~indep.is_sm]
     idx = indep.idx[~indep.is_sm]
     L = xyz.shape[0]
