@@ -49,7 +49,7 @@ class ContigMap():
         self.hal_idx = hal_idx
         self.idx_rf = idx_rf
 
-        parse_inpaint = lambda x: ",".join(x).split(",") if x is not None else None
+        parse_inpaint = lambda x: "/".join(x).split("/") if x is not None else None
         self.inpaint_seq = parse_inpaint(inpaint_seq)
         self.inpaint_str = parse_inpaint(inpaint_str)
 
@@ -65,7 +65,7 @@ class ContigMap():
             # using default contig generation, which outputs in rosetta-like format
             self.contigs = contigs
             if contig_atoms is not None:
-                self.contig_atoms={k:v.split(",") for k,v in eval(contig_atoms).items()}
+                self.contig_atoms={k:v.split("/") for k,v in eval(contig_atoms).items()}
             else:
                 self.contig_atoms = None
             (
@@ -179,7 +179,7 @@ class ContigMap():
             for con in contig_list:
                 inpaint_chains += 1
                 #chain to be inpainted. These are the only chains that count towards the length of the contig
-                subcons = con.split(",")
+                subcons = con.split("/")
                 subcon_out = []
                 for subcon in subcons:
                     if subcon[0].isalpha():
@@ -200,7 +200,7 @@ class ContigMap():
                             length_inpaint=int(subcon)
                             subcon_out.append(f'{length_inpaint}-{length_inpaint}')
                             sampled_mask_length += int(subcon)
-                sampled_mask.append(','.join(subcon_out))
+                sampled_mask.append('/'.join(subcon_out))
             # check length is compatible
             if self.length is not None:
                 if sampled_mask_length >= self.length[0] and sampled_mask_length < self.length[1]:
@@ -225,9 +225,9 @@ class ContigMap():
         inpaint_chain_break = []
         atomize_resnum2atomnames = {}
         for con in self.sampled_mask:
-            if (all([i[0].isalpha() for i in con.split(",")[:-1]]) and con.split(",")[-1] == '0') or self.topo is True:
+            if (all([i[0].isalpha() for i in con.split("/")[:-1]]) and con.split("/")[-1] == '0') or self.topo is True:
                 #receptor chain
-                subcons = con.split(",")[:-1]
+                subcons = con.split("/")[:-1]
                 assert all([i[0] == subcons[0][0] for i in subcons]), "If specifying fragmented receptor in a single block of the contig string, they MUST derive from the same chain"
                 assert all(int(subcons[i].split("-")[0][1:]) < int(subcons[i+1].split("-")[0][1:]) for i in range(len(subcons)-1)), "If specifying multiple fragments from the same chain, pdb indices must be in ascending order!"
                 for idx, subcon in enumerate(subcons):
@@ -244,7 +244,7 @@ class ContigMap():
                         receptor_chain_break.append((receptor_idx-1,200)) #200 aa chain break 
             else:
                 inpaint_chain_idx += 1
-                for subcon in con.split(","):
+                for subcon in con.split("/"):
                     if subcon[0].isalpha(): # this is a part of the motif because the first element of the contig is the chain letter
                         ref_to_add=[(subcon[0], i) for i in np.arange(int(subcon.split("-")[0][1:]),int(subcon.split("-")[1])+1)]
                         inpaint.extend(ref_to_add)
