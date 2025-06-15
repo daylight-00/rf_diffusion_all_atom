@@ -4,7 +4,7 @@ defaults:
   - _self_
 
 inference:
-  ckpt_path: /home/hwjang/aipd/rf_diffusion_all_atom/RFDiffusionAA_paper_weights.pt
+  ckpt_path: RFDiffusionAA_paper_weights.pt
   align_motif: False
   str_self_cond: True
 
