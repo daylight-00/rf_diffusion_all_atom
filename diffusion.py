@@ -368,7 +368,7 @@ class IGSO3():
         return self.sigma_idx(self.sigma(continuous_t))
 
     def sigma(self, t: torch.tensor):
-        """Extract \sigma(t) corresponding to chosen sigma schedule.
+        r"""Extract \sigma(t) corresponding to chosen sigma schedule.
         
         Args:
             t: torch tensor with time between 0 and 1
@@ -386,7 +386,7 @@ class IGSO3():
             raise ValueError(f'Unrecognize schedule {self.schedule}')
 
     def g(self, t):
-        """g returns the drift coefficient at time t
+        r"""g returns the drift coefficient at time t
 
         since 
             sigma(t)^2 := \int_0^t g(s)^2 ds,
@@ -397,7 +397,7 @@ class IGSO3():
             t: scalar time between 0 and 1
         
         Returns:
-            drift cooeficient as a scalar.
+            drift coefficient as a scalar.
         """
         t = torch.tensor(t, requires_grad=True)
         sigma_sqr = self.sigma(t)**2
