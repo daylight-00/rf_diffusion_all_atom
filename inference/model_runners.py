@@ -121,7 +121,7 @@ class Sampler:
         self._log.info(f'Reading checkpoint from {self.ckpt_path}')
         print(f'loading {self.ckpt_path}')
         self.ckpt  = torch.load(
-            self.ckpt_path, map_location=self.device)
+            self.ckpt_path, map_location=self.device, weights_only=False)
         print(f'loaded {self.ckpt_path}')
 
     def assemble_config_from_chk(self) -> None:
