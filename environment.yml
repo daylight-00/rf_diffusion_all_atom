@@ -1,0 +1,26 @@
+name: rfdaa
+channels:
+  - nvidia
+  - pytorch
+  - dglteam/label/th24_cu124
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.12.11
+  - pytorch=2.4.1
+  - pytorch-cuda=12.4
+  - dgl
+  - torchdata
+  - hydra-core
+  - omegaconf
+  - scipy
+  - icecream
+  - openbabel
+  - assertpy
+  - opt-einsum
+  - pandas
+  - pydantic
+  - deepdiff
+  - e3nn
+  - fire
+  - numpy=1.26.4
