@@ -13,7 +13,7 @@ dependencies:
   - torchdata
   - hydra-core
   - omegaconf
-  - scipy
+  - scipy=1.14.1
   - icecream
   - openbabel
   - assertpy
@@ -23,4 +23,4 @@ dependencies:
   - deepdiff
   - e3nn
   - fire
-  - numpy=1.26.4
+  - numpy
